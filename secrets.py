@@ -1,2 +1,2 @@
-client_ID = 'H9aRXZs69TL0WPaqEQzyUA'
-API_KEY = 'DdDNJhHyvlVkeR11nkap4RtQ2mc2oGWPUKc3cHO--SCkmc5AZ115tw7m9wuh5xSECRretftxWwmpiNSqx5f_76m9AdzLYR54Qj7NJKFKqfiXY8YJ6ZTQ2NV8NNvMWnYx'
+client_ID = ''
+API_KEY = ''
