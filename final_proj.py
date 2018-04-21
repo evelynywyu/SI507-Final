@@ -8,19 +8,38 @@ from flask import Flask, render_template
 
 
 
-# API KEYS for Yelp
-API_token = secrets.API_KEY
-header = {'authorization': "Bearer " + API_token}
-
 # GLOBAL VARIABLE
-
+DBName = 'search.db'
+## These varibles are used to pass value to the html files.
 result = []
 history = []
 review_list = []
 category_list = []
 most_made_list = []
 
+
 ### YELP ###
+
+# Originally I defined the class "restaurant" to store data retrieved from Yelp API
+# so that I can use attributes (e.g., rating, location) in a more convenient way
+# however, I later on thought it's okay just to use functions. so I commented out the class
+
+# class restaurant():
+#     def __init__(self, restaurant_dic):
+#         self.name = restaurant_dic["name"]
+#         self.rating = restaurant_dic["attributes"]["rating"]
+#         self.id = restaurant_dic["attributes"]["id"]
+#         self.lon = restaurant_dic["attributes"]["lon"]
+#         self.lan = restaurant_dic["attributes"]["lan"]
+#
+#     def __str__(self):
+#
+#         return "{} / rating: {}".format(self.name, self.rating)
+
+# API KEYS for Yelp
+
+API_token = secrets.API_KEY
+header = {'authorization': "Bearer " + API_token}
 
 # Caching data
 
@@ -64,6 +83,7 @@ def make_request_using_cache(baseurl, params, headers = header):
         fw.close() # Close the open file
         return CACHE_DICTION[unique_ident]
 
+
 # get data from Yelp API
 
 def getYelp(search_term, location = "Ann Arbor", sort_rule = "rating"):
@@ -99,124 +119,83 @@ def getYelp(search_term, location = "Ann Arbor", sort_rule = "rating"):
 
     result = result_list   # "result" has value here
 
-
-### Store search keyword in the database
-
-# Create a database when the user first initiates the program
-
-DBName = 'search.db'
-
-conn = sqlite3.connect(DBName)
-cur = conn.cursor()
-
-if len(CACHE_DICTION) == 0:
-    # Assuming user initates the program using the same computer,
-    # if the CACHE_DICTION is empty, it means that he/she heasn't used this program before
-    # Hence the program creates a new table "History"
-    # If the CACHE_DICTOIN is not empty, then this step is skipped.
-
-    statement = '''
-        DROP TABLE IF EXISTS 'History'
-    '''
-    cur.execute(statement)
-    conn.commit()
-
-    create_table_statement = '''
-        CREATE TABLE 'History' (
-        'Id' INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-        'SearchWord' TEXT NOT NULL,
-        'NumberOfSearch' INTEGER NOT NULL,
-        'LastSearchOn' TEXT NOT NULL
-        );
-    '''
-    cur.execute(create_table_statement)
-    conn.commit()
-    conn.close()
-
-# Save search keyword
+# Save search keyword in the database
 def saveSearch(keyword):
-
     global DBName
 
+    # initate the database
     conn = sqlite3.connect(DBName)
     cur = conn.cursor()
 
-    statement = '''
-        SELECT SearchWord, NumberOfSearch
-        FROM History
-    '''
+    # Create new table
+    if len(CACHE_DICTION) == 0:
+        # Assuming user initates the program using the same computer,
+        # if the CACHE_DICTION is empty, it means that he/she heasn't used this program before
+        # Hence the program creates a new table "History"
+        # If the CACHE_DICTOIN is not empty, then this step is skipped.
 
-    cur.execute(statement)
-    # print("This is history")
-    # print(cur)
-
-
-    current_dict = {}
-    current_list = []
-    keyword_list = []
-    for row in cur:
-        keyword_list.append(row[0])
-        current_dict[row[0]] = {}
-        current_dict[row[0]]["search_term"] = row[0]
-        current_dict[row[0]]["count"] = row[1]
-        current_list.append(current_dict[row[0]])
-
-    if keyword not in keyword_list:
-        count = 1
         statement = '''
-            INSERT INTO 'History' ('Id', 'SearchWord', 'NumberOfSearch', 'LastSearchOn')
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            DROP TABLE IF EXISTS 'History'
         '''
-        insersion = (None, keyword, count, )
-        cur.execute(statement, insersion)
+        cur.execute(statement)
         conn.commit()
 
+        create_table_statement = '''
+            CREATE TABLE 'History' (
+            'Id' INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+            'SearchWord' TEXT NOT NULL,
+            'NumberOfSearch' INTEGER NOT NULL,
+            'LastSearchOn' TEXT NOT NULL
+            );
+        '''
+        cur.execute(create_table_statement)
+        conn.commit()
+        conn.close()
+
+    # Update/insert value
     else:
-        count = str(int(current_dict[keyword]["count"]) + 1)
+        # If the table already exists
         statement = '''
-            UPDATE History
-            SET NumberOfSearch = ?, LastSearchOn = CURRENT_TIMESTAMP
-            WHERE SearchWord = ?
+            SELECT SearchWord, NumberOfSearch
+            FROM History
         '''
-        insersion = (count, keyword)
-        cur.execute(statement, insersion)
-        conn.commit()
+        cur.execute(statement)
 
-        # if row[0] != None:
-        #     if keyword != row[0]:
-        #         count = 1
-        #         statement = '''
-        #             INSERT INTO 'History' ('Id', 'SearchWord', 'NumberOfSearch', 'LastSearchOn')
-        #             VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-        #         '''
-        #         insersion = (None, keyword, count, )
-        #
-        #         cur.execute(statement, insersion)
-        #
-        #     else:
-        #         count = str(int(row[1]) + 1)
-        #         statement = '''
-        #             UPDATE History
-        #             SET NumberOfSearch = ?, LastSearchOn = CURRENT_TIMESTAMP
-        #             WHERE SearchWord = ?
-        #         '''
-        #         insersion = (count, keyword)
-        #         cur.execute(statement, insersion)
-        #
-        # else:
-        #     count = 1
-        #     statement = '''
-        #         INSERT INTO 'History' ('Id', 'SearchWord', 'NumberOfSearch', 'LastSearchOn')
-        #         VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-        #     '''
-        #     insersion = (None, keyword, count, )
-        #
-        #     cur.execute(statement, insersion)
+        current_dict = {}
+        current_list = []
+        keyword_list = []
+        for row in cur:
+            keyword_list.append(row[0])
+            current_dict[row[0]] = {}
+            current_dict[row[0]]["search_term"] = row[0]
+            current_dict[row[0]]["count"] = row[1]
+            current_list.append(current_dict[row[0]])
 
-    conn.close()
-    return None
+        if keyword not in keyword_list:
+            count = 1
+            statement = '''
+                INSERT INTO 'History' ('Id', 'SearchWord', 'NumberOfSearch', 'LastSearchOn')
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            '''
+            insersion = (None, keyword, count, )
+            cur.execute(statement, insersion)
+            conn.commit()
 
-# Return the history
+        else:
+            count = str(int(current_dict[keyword]["count"]) + 1)
+            statement = '''
+                UPDATE History
+                SET NumberOfSearch = ?, LastSearchOn = CURRENT_TIMESTAMP
+                WHERE SearchWord = ?
+            '''
+            insersion = (count, keyword)
+            cur.execute(statement, insersion)
+            conn.commit()
+
+        conn.close()
+        return None
+
+# Return the search history from the database
 
 def returnHistory():
     global DBName
@@ -233,18 +212,17 @@ def returnHistory():
     '''
 
     cur.execute(statement)
-
+    temp_list = []
     search_term = {}
     for row in cur:
         search_term = {"name": row[0], "num": row[1], "lastSearch": row[2]}
-        history.append(search_term)
+        temp_list.append(search_term)
 
-
+    history = temp_list
     conn.close()
 
 
-# Retrun the reviews
-
+# Retrun the reviews of restaurants
 def getReview():
     global review_list
     global result
@@ -262,7 +240,7 @@ def getReview():
         review_list.append(review_dic)
 
 
-### Plot on map
+# Plot restaurants on map
 
 def plotMap():
     global result
@@ -385,12 +363,11 @@ def getRecipeCategory():
             sub_category_name = sub.text
             sub_category_url = sub['href']
             category_dic["subs"][sub_category_name] = sub_category_url
-            # print(sub_category_name, "--> ", sub_category_url)
+
         temp_list.append(category_dic)
         category_list = temp_list
-        # print(category_list)
 
-    # return name_url
+    return temp_list
 
 def getMostMade(url):
     # category_dic, category_num, category
@@ -420,6 +397,3 @@ def getMostMade(url):
         temp_list.append(x)
     # print(most_made_list)
     most_made_list = temp_list
-
-
-        # print(recipe_name, " / ", recipe_url, " / ", recipe_star, " / ", recipe_freq)

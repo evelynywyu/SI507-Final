@@ -29,6 +29,7 @@
 
 4) each html file has a linked css file in the static folder
 
+5) I also provided one unit testing (file_proj_test.py)
 
 3. User guide:
 1) Activate a virtual environment
