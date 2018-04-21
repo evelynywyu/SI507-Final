@@ -1,0 +1,29 @@
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"/>
+<link rel="stylesheet" href="/static/style-7.css">
+
+<header>
+  <h2> Please choose one category: </h2>
+</header>
+
+<body>
+  <form action = "/mostmade" method = "POST">
+  {% for cate in category %}
+    <h4> {{cate['name']}} </h4>
+    {% for item in cate["subs"] %}
+    <p class = "button-choice"><input type = "radio" name = "type" value = "{{cate["subs"][item]}}"/>   {{item}}</p>
+    {% endfor %}
+  {% endfor %}
+    <p><input type="submit" value="Submit"/></p>
+
+  </form>
+
+  <div class = "container options">
+    <p> <a href = "/"> Return to Homepage </a> </p>
+    
+  </div>
+</body>
+
+
+<footer>
+  <p> This is the final project for SI 507 (Programming II) Class at UMSI </p>
+</footer>

@@ -1,0 +1,40 @@
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"/>
+<link rel="stylesheet" href="/static/style-4.css">
+
+<header>
+  <h1> Here are the top restaurants: </h1>
+</header>
+
+<body>
+
+{% for r in result %}
+
+  <div class = "entry">
+    <p class = "result-res"> {{r['name']}} has a rating of {{r['attributes']['rating']}}</p>
+  </div>
+
+{% endfor %}
+
+<div class = "container options">
+  <div class = "row">
+    <div class = "home col-sm-3">
+      <p> <a href = "/"> Return to Homepage </a> </p>
+    </div>
+
+    <div class = "restaurant-home col-sm-3">
+      <p> <a href = "/restaurants"> Return to Restaurant function page </a> </p>
+    </div>
+
+    <div class = "map col-sm-3">
+      <p> <a href = "/map"> Show these restaurants on the map </a> </p>
+    </div>
+
+    <div class = "review col-sm-3">
+      <p> <a href = "/review"> Show the review of restaurant </a></p>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <p> This is the final project for SI 507 (Programming II) Class at UMSI </p>
+</footer>

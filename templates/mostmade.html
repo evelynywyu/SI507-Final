@@ -1,0 +1,49 @@
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css"/>
+<link rel="stylesheet" href="/static/style-8.css">
+
+
+
+<header>
+  <h2> The top 3 most made recipes are: </h2>
+</header>
+
+<body>
+  <table border = 1 align = "center">
+    <tr>
+      <td> No. </td>
+      <td> Recipe Name </td>
+      <td> Average Rating </td>
+      <td> Times made </td>
+      <td> Link to the recipe </td>
+    </tr>
+
+  {% for r in recipe %}
+    <tr>
+      <td> {{r[0]}} </td>
+      <td> {{r[1]}} </td>
+      <td> {{r[3]}} </td>
+      <td> {{r[4]}} </td>
+      <td> {{r[2]}} </td>
+
+    </tr>
+  {% endfor %}
+
+  </table>
+
+<div class = "container options">
+  <div class = "row">
+    <div class = "home col-sm-6">
+      <p> <a href = "/"> Return to Homepage </a> </p>
+    </div>
+
+    <div class = "restaurant-home col-sm-6">
+      <p> <a href = "/recipecategory"> Return to category </a> </p>
+    </div>
+  </div>
+</div>
+</body>
+
+
+<footer>
+  <p> This is the final project for SI 507 (Programming II) Class at UMSI </p>
+</footer>

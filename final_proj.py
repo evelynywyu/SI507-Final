@@ -1,14 +1,24 @@
 import requests
 import json
 import secrets
-from requests_oauthlib import OAuth1
 import sqlite3
+import plotly.plotly as py
+from bs4 import BeautifulSoup
+from flask import Flask, render_template
 
 
-# API KEYS
+
+# API KEYS for Yelp
 API_token = secrets.API_KEY
 header = {'authorization': "Bearer " + API_token}
 
+# GLOBAL VARIABLE
+
+result = []
+history = []
+review_list = []
+category_list = []
+most_made_list = []
 
 ### YELP ###
 
@@ -38,13 +48,13 @@ def make_request_using_cache(baseurl, params, headers = header):
 
     ## first, look in the cache to see if we already have this data
     if unique_ident in CACHE_DICTION:
-        print("Getting cached data...")
+        # print("Getting cached data...")
         return CACHE_DICTION[unique_ident]
 
     ## if not, fetch the data afresh, add it to the cache,
     ## then write the cache to file
     else:
-        print("Making a request for new data...")
+        # print("Making a request for new data...")
         # Make the request and cache the new data
         resp = requests.get(baseurl, params, headers = header)
         CACHE_DICTION[unique_ident] = json.loads(resp.text)
@@ -58,6 +68,7 @@ def make_request_using_cache(baseurl, params, headers = header):
 
 def getYelp(search_term, location = "Ann Arbor", sort_rule = "rating"):
     global API_token
+    global result
     baseurl = "https://api.yelp.com/v3/businesses/search"
     params = {}
     params['term'] = search_term
@@ -77,14 +88,16 @@ def getYelp(search_term, location = "Ann Arbor", sort_rule = "rating"):
     result_list = []
     for item in response["businesses"]:
         # print(item["name"])
-        aggregate_dic[item["name"]] = {}   # create a dic for each business
-        aggregate_dic[item["name"]]["name"] = item["name"]
-        aggregate_dic[item["name"]]["rating"] = item["rating"]
-        aggregate_dic[item["name"]]["lon"] = item["coordinates"]["longitude"]
-        aggregate_dic[item["name"]]["lan"] = item["coordinates"]["latitude"]
-        result_list.append(aggregate_dic[item["name"]])
+        aggregate_dic = {"name":item["name"], "attributes":{}}   # create a dic for each business
+        aggregate_dic["attributes"]["rating"] = item["rating"]
+        aggregate_dic["attributes"]["lon"] = item["coordinates"]["longitude"]
+        aggregate_dic["attributes"]["lat"] = item["coordinates"]["latitude"]
+        aggregate_dic["attributes"]["id"] = item["id"]
+        result_list.append(aggregate_dic)
 
-    return result_list
+    saveSearch(search_term)
+
+    result = result_list   # "result" has value here
 
 
 ### Store search keyword in the database
@@ -96,27 +109,29 @@ DBName = 'search.db'
 conn = sqlite3.connect(DBName)
 cur = conn.cursor()
 
-statement = '''
-    DROP TABLE IF EXISTS 'History'
-'''
-cur.execute(statement)
-conn.commit()
+if len(CACHE_DICTION) == 0:
+    # Assuming user initates the program using the same computer,
+    # if the CACHE_DICTION is empty, it means that he/she heasn't used this program before
+    # Hence the program creates a new table "History"
+    # If the CACHE_DICTOIN is not empty, then this step is skipped.
 
+    statement = '''
+        DROP TABLE IF EXISTS 'History'
+    '''
+    cur.execute(statement)
+    conn.commit()
 
-# ***** Check ******
-# How to create table only at the first time the user initiates the program???
-# *****************
-
-create_table_statement = '''
-    CREATE TABLE 'History' (
-    'Id' INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    'SearchWord' TEXT NOT NULL,
-    'NumberOfSearch' INTEGER NOT NULL,
-    'LastSearchOn' TEXT NOT NULL
-    );
-'''
-cur.execute(create_table_statement)
-conn.commit()
+    create_table_statement = '''
+        CREATE TABLE 'History' (
+        'Id' INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        'SearchWord' TEXT NOT NULL,
+        'NumberOfSearch' INTEGER NOT NULL,
+        'LastSearchOn' TEXT NOT NULL
+        );
+    '''
+    cur.execute(create_table_statement)
+    conn.commit()
+    conn.close()
 
 # Save search keyword
 def saveSearch(keyword):
@@ -132,8 +147,8 @@ def saveSearch(keyword):
     '''
 
     cur.execute(statement)
-    print("This is history")
-    print(cur)
+    # print("This is history")
+    # print(cur)
 
 
     current_dict = {}
@@ -145,15 +160,6 @@ def saveSearch(keyword):
         current_dict[row[0]]["search_term"] = row[0]
         current_dict[row[0]]["count"] = row[1]
         current_list.append(current_dict[row[0]])
-
-    # print("Current dict:")
-    # print(current_dict)
-    #
-    # print("current_list:")
-    # print(current_list)
-    #
-    # print("keyword_list:")
-    # print(keyword_list)
 
     if keyword not in keyword_list:
         count = 1
@@ -207,20 +213,20 @@ def saveSearch(keyword):
         #
         #     cur.execute(statement, insersion)
 
-
-
     conn.close()
+    return None
 
 # Return the history
 
 def returnHistory():
     global DBName
+    global history
 
     conn = sqlite3.connect(DBName)
     cur = conn.cursor()
 
     statement = '''
-        SELECT SearchWord, NumberOfSearch
+        SELECT SearchWord, NumberOfSearch, LastSearchOn
         FROM History
         ORDER BY NumberOfSearch DESC
         LIMIT 10
@@ -228,145 +234,192 @@ def returnHistory():
 
     cur.execute(statement)
 
-    print("Below are the top 10 keyword you searched in the past: ")
-    count = 0
+    search_term = {}
     for row in cur:
-        count += 1
-        print(count, ") ", row[0], " (the number of search: )", row[1])
+        search_term = {"name": row[0], "num": row[1], "lastSearch": row[2]}
+        history.append(search_term)
+
 
     conn.close()
 
 
-### Interactive command
+# Retrun the reviews
 
-# help text
-instruction_message = '''
-    This is instruction messge (To be modified)
-'''
+def getReview():
+    global review_list
+    global result
 
-initial_command = '''
-    *** Welcome to Evelyn's 507 final project! ***
+    for r in result:
+        # Get review for each restaurant
+        baseurl = "https://api.yelp.com/v3/businesses/" + r["attributes"]["id"] + "/reviews"
+        params = {}
+        response = make_request_using_cache(baseurl,params = params)
 
-    Please enter a command:
+        review_dic = {"name": r["name"], "reviews":[]}
+        for review in response["reviews"]:
+            review_dic["reviews"].append(review["text"])
 
-    <search keyword> : Search restaurants based on the keyword
-    <trending> : Check out what's the trending search in the past month
-    <help> : Read the program instruction
-    <exit> : Exit the program
-
-'''
-
-followup_command = '''
-
-    Please enter a command:
-
-    <map> : Show the 10 restaurants on a map
-    <reivew restaurants> : See the 10 most recent reviews of the selected restaurant
-    <opentable> : Check which restaurants are available for reservation via Open Table
-    <search keyword> : Search other restaurants based on the keyword
-    <help> : Read the program instruction
-    <trending> : Check out what's the trending search in the past month
-
-'''
-
-# function for the follow-up actions (write this function first, because the initial action will use this function)
-def secondRun():
-
-    global followup_command
-
-    while True:
-
-        print(followup_command)
-
-        user_input = input("Please enter a command usting the illustrated format.")
-
-        if len(user_input.split()) > 1:
-            command = user_input.split()[0]
-        else:
-            command = user_input
-
-        if command == 'exit':
-            print('Exiting the program. Thank you and bye!')
-            return
+        review_list.append(review_dic)
 
 
-        elif command == 'help':
-            print(instruction_message)
+### Plot on map
 
-        elif command == 'search':
-            result = getYelp(user_input.split()[1])
-            print("The 10 top ranking restaurants are:")
-            num = 0
-            for item in result:
-                num += 1
-                print(num, ') ', item["name"], "has a rating of: ", item["rating"])
+def plotMap():
+    global result
 
-        elif command == 'trending':
-            # select data from the database
-            pass
+    lat_vals = []
+    lon_vals = []
+    text_vals = []
 
-        elif command == 'map':
-            # show map
-            pass
+    for restaurant in result:
+        lat_vals.append(restaurant["attributes"]['lat'])
+        lon_vals.append(restaurant["attributes"]['lon'])
+        text_vals.append(restaurant["name"])
 
-        elif command == 'opentable':
-            # Retrieve data from opentable API
-            pass
+        # set up data format
+    data = [ dict(
+        type = 'scattergeo',
+        locationmode = 'USA-states',
+        lon = lon_vals,
+        lat = lat_vals,
+        text = text_vals,
+        mode = 'markers',
+        marker = dict(
+            size = 8,
+            symbol = 'star',
+            ))]
 
-        else:
-            print("Please enter a valid command.")
+        # set up layout
+        # min_lat = -90
+        # max_lat = 90
+        # min_lon = -180
+        # max_lon = 180
+        #
+        # for str_v in lat_vals:
+        #     v = float(str_v)
+        #     if v < min_lat:
+        #         min_lat = v
+        #     if v > max_lat:
+        #         max_lat = v
+        # for str_v in lon_vals:
+        #     v = float(str_v)
+        #     if v < min_lon:
+        #         min_lon = v
+        #     if v > max_lon:
+        #         max_lon = v
+        #
+        # max_range = max(abs(max_lat - min_lat), abs(max_lon - min_lon))
+        # padding = max_range * .10
+        # lat_axis = [min_lat - padding, max_lat + padding]
+        # lon_axis = [min_lon - padding, max_lon + padding]
+        # center_lat = (max_lat+min_lat) / 2
+        # center_lon = (max_lon+min_lon) / 2
 
-# function for the initial command
-def play():
+    layout = dict(title = 'Restaurants in Ann Arbor',
+            geo = dict(scope='usa',projection=dict( type='albers usa' ),
+            showland = True,
+            landcolor = "rgb(250, 250, 250)",
+            subunitcolor = "rgb(100, 217, 217)",
+            countrycolor = "rgb(217, 100, 217)",
+                # lataxis = {'range': lat_axis},
+                # lonaxis = {'range': lon_axis},
+            subunitwidth = 3),)
 
-    global instruction_message
-    global initial_command
+    fig = dict(data=data, layout=layout )
+    py.plot( fig, validate=False, filename='state_map' )
 
-    print(initial_command)
+### Recipe crawling
 
-    while True:
+# Caching
+CACHE_FNAME_R = 'cache_recipe.json'
+try:
+    cache_file_r = open(CACHE_FNAME_R, 'r')
+    cache_contents_r = cache_file_r.read()
+    CACHE_DICTION_R = json.loads(cache_contents_r)
+    cache_file_r.close()
 
-        user_input == input("Please enter a command usting the illustrated format.")
+except:
+    CACHE_DICTION_R = {}
 
-        if len(user_input.split()) > 1:
-            command = user_input.split()[0]
-        else:
-            command = user_input
+def make_request_using_cache_recipe(url):
 
-        if command == 'exit':
-            print('Exiting the program. Thank you and bye!')
-            return
+    if url in CACHE_DICTION_R:
+            print("Getting cached data...")
+            return CACHE_DICTION_R[url]
 
-        elif command == 'help':
-            print(instruction_message)
+        ## if not, fetch the data afresh, add it to the cache,
+        ## then write the cache to file
+    else:
+        print("Making a request for new data...")
+        # Make the request and cache the new data
+        resp = requests.get(url)
+        CACHE_DICTION_R[url] = resp.text
+        dumped_json_cache = json.dumps(CACHE_DICTION_R)
+        fw = open(CACHE_FNAME_R,"w")
+        fw.write(dumped_json_cache)
+        fw.close() # Close the open file
+        return CACHE_DICTION_R[url]
 
-        elif command == 'search':
-            result = getYelp(user_input.split()[1])
-            print("The 10 top ranking restaurants are:")
-            num = 0
-            for item in result:
-                num += 1
-                print(num, ') ', item["name"], "has a rating of: ", item["rating"])
-            secondRun()
+def getRecipeCategory():
+    global category_list
 
-        elif command == 'trending':
-            # select data from the database
-            pass
+    url = "https://www.allrecipes.com/recipes/"
+    html = make_request_using_cache_recipe(url)
+    soup = BeautifulSoup(html, 'html.parser')
 
-        else:
-            print("Please enter a valid command.")
+    div = soup.find_all('div', class_ = 'all-categories-col')  # should return 4 columns
+    section_list = []
+    for col in div:
+        section = col.find_all('section') #should return 2 sections without id
+        for category in section:
+            section_list.append(category)
+
+    category_dic = {}
+    temp_list = []
+    for section in section_list:
+        category_name = section.find('h3',class_="heading__h3").text
+        category_dic = {"name":category_name,"subs":{}}
+
+        sub_category = section.find_all('a')
+        for sub in sub_category:
+            sub_category_name = sub.text
+            sub_category_url = sub['href']
+            category_dic["subs"][sub_category_name] = sub_category_url
+            # print(sub_category_name, "--> ", sub_category_url)
+        temp_list.append(category_dic)
+        category_list = temp_list
+        # print(category_list)
+
+    # return name_url
+
+def getMostMade(url):
+    # category_dic, category_num, category
+    # baseurl = category_dic[category_num][category]
+    global most_made_list
+
+    baseurl = url
+    html = make_request_using_cache_recipe(baseurl)
+    soup = BeautifulSoup(html,'html.parser')
+
+    links = soup.find_all("li", class_ = "list-recipes__recipe")
+    # print(links)
+
+    count = 0
+    temp_list = []
+    for li in links[0:3]:
+        count += 1
+        # print(li)
+        # div = li.find('div')
+        recipe_url = li.find('a')['href']
+        # print(recipe_url)
+        recipe_name = li.find('h3').text
+        # print(recipe_name)
+        recipe_star = str(li.find('span', class_ = "stars")['data-ratingstars'])[0:3]
+        recipe_freq = li.find('format-large-number')['number']
+        x = (count, recipe_name,recipe_url,recipe_star,recipe_freq)
+        temp_list.append(x)
+    # print(most_made_list)
+    most_made_list = temp_list
 
 
-
-
-## Plot 10 restaurants on the map
-
-
-
-
-### test
-
-test = getYelp('Cafe')
-print(test)
-
-saveSearch('Cafe')
+        # print(recipe_name, " / ", recipe_url, " / ", recipe_star, " / ", recipe_freq)

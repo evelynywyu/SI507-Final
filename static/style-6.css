@@ -1,0 +1,31 @@
+header {
+
+  color: white;
+  text-align: center;
+  opacity: 1;
+  height: 10%;
+}
+
+body {
+  background-color: black;
+  height:70%;
+}
+
+
+h3 {
+  color: yellow;
+  text-align: center;
+}
+
+body p {
+  text-align: center;
+  color:white;
+}
+
+footer p {
+  margin-top: 5%;
+  text-align: center;
+  color: white;
+  font-size: 10px;
+  height: 10%;
+}
